@@ -170,3 +170,7 @@ This project is inspired by Python's built-in [`http.server`](https://docs.pytho
 
 - Python's `http.server` module for inspiration
 - The Python community for excellent tools and libraries
+
+## Reference
+
+- https://github.com/python/cpython/blob/3.14/Lib/http/server.py
