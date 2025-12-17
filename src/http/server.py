@@ -150,6 +150,8 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
         except (ValueError, IndexError):
             self.send_error(HTTPStatus.BAD_REQUEST, f"Bad request version ({version})")
             return False
+
+        self.request_version = version
         if version_number >= (1, 1) and self.protocol_version >= "HTTP/1.1":
             self.close_connection = False
         if version_number >= (2, 0):
@@ -194,6 +196,7 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
         ):
             if not self.handle_expect_100():
                 return False
+
         return True
 
     def handle_expect_100(self):
@@ -553,7 +556,6 @@ class SimpleHttpRequestHandler(BaseHTTPRequestHandler):
                         self.end_headers()
                         f.close()
                         return None
-
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(fs.st_size))

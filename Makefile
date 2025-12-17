@@ -20,6 +20,9 @@ install-dev:
 test:
 	pytest
 
+run:
+	python -m src.http.server 8002
+
 lint:
 	flake8 src tests
 	mypy src
