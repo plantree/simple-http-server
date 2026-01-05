@@ -1,17 +1,17 @@
 """Simple HTTP Server package."""
 
-from enum import IntEnum
+from enum import IntEnum, StrEnum
 
 __version__ = "0.1.0"
-__author__ = "plantree"
+__author__ = "Plantree"
 
-__all__ = ["HTTPStatus", "HTTPMethod", "__version__"]
+__all__ = ["HTTPStatus", "HTTPMethod", "__version__", "__author__"]
 
 
 class HTTPStatus(IntEnum):
     """HTTP status codes."""
 
-    def __new__(cls, value, phrase, description=""):
+    def __new__(cls, value: int, phrase: str, description: str):
         obj = int.__new__(cls, value)
         obj._value_ = value
         obj.phrase = phrase
@@ -23,6 +23,7 @@ class HTTPStatus(IntEnum):
         """Check if the status code is informational (1xx)."""
         return 100 <= self < 200
 
+    @property
     def is_success(self) -> bool:
         """Check if the status code is successful (2xx)."""
         return 200 <= self < 300
@@ -337,38 +338,33 @@ class HTTPStatus(IntEnum):
     )
 
 
-class HTTPMethod(str):
+class HTTPMethod(StrEnum):
     """HTTP methods and descriptions."""
 
-    def __new__(cls, value: str, description: str = ""):
+    def __new__(cls, value: str, description: str):
         obj = str.__new__(cls, value)
+        obj._value_ = value
         obj.description = description
         return obj
 
     def __repr__(self) -> str:
         return f"<HTTPMethod.{str(self)}>"
 
-
-# HTTP Method constants
-HTTPMethod.CONNECT = HTTPMethod(
-    "CONNECT", "Establishes a tunnel to the server identified by the target resource"
-)
-HTTPMethod.DELETE = HTTPMethod("DELETE", "Deletes the specified resource")
-HTTPMethod.GET = HTTPMethod(
-    "GET", "Requests a representation of the specified resource"
-)
-HTTPMethod.HEAD = HTTPMethod(
-    "HEAD",
-    "Asks for a response identical to a GET request, but without the response body",
-)
-HTTPMethod.OPTIONS = HTTPMethod(
-    "OPTIONS", "Describes the communication options for the target resource"
-)
-HTTPMethod.PATCH = HTTPMethod("PATCH", "Applies partial modifications to a resource")
-HTTPMethod.POST = HTTPMethod(
-    "POST", "Submits data to be processed to a specified resource"
-)
-HTTPMethod.PUT = HTTPMethod("PUT", "Uploads a representation of the specified resource")
-HTTPMethod.TRACE = HTTPMethod(
-    "TRACE", "Performs a message loop-back test along the path to the target resource"
-)
+    CONNECT = (
+        "CONNECT",
+        "Establishes a tunnel to the server identified by the target resource",
+    )
+    DELETE = "DELETE", "Deletes the specified resource"
+    GET = "GET", "Requests a representation of the specified resource"
+    HEAD = (
+        "HEAD",
+        "Asks for a response identical to a GET request, but without the response body",
+    )
+    OPTIONS = "OPTIONS", "Describes the communication options for the target resource"
+    PATCH = "PATCH", "Applies partial modifications to a resource"
+    POST = "POST", "Submits data to be processed to a specified resource"
+    PUT = "PUT", "Uploads a representation of the specified resource"
+    TRACE = (
+        "TRACE",
+        "Performs a message loop-back test along the path to the target resource",
+    )

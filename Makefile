@@ -21,7 +21,7 @@ test:
 	pytest
 
 run:
-	python -m src.http.server 8002
+	python3.11 -m src.http.server 8002
 
 lint:
 	flake8 src tests
