@@ -9,10 +9,12 @@ This project provides a lightweight and easy-to-use HTTP server implementation i
 ## Features
 
 - 🚀 Simple and intuitive API
-- 📦 Minimal dependencies
+- 📦 Minimal dependencies (pure Python)
 - 🔧 Easy to extend and customize
-- 🧪 Well-tested with comprehensive test coverage
+- 📂 Static file serving with directory listing
+- 🔄 HTTP/1.1 with keep-alive support
 - 📝 Type hints for better IDE support
+- 🧪 Well-tested with comprehensive test coverage
 
 ## Installation
 
@@ -40,18 +42,51 @@ make install-dev
 
 ## Usage
 
-```python
-from simple_http_server.main import main
+### Command Line
 
-# Start the server
-main()
+```bash
+# Start the server on default port 8080
+python -m http
+
+# Specify a custom port
+python -m http 3000
+
+# Bind to a specific address
+python -m http -b 127.0.0.1 8080
+
+# Serve a specific directory
+python -m http -d /path/to/serve 8080
+```
+
+### Command Line Options
+
+| Option | Description |
+|--------|-------------|
+| `port` | Port number (default: 8080) |
+| `-b`, `--bind` | Bind to specific address (default: all interfaces) |
+| `-d`, `--directory` | Directory to serve (default: current directory) |
+
+### Programmatic Usage
+
+```python
+from http.server import SimpleHttpRequestHandler, HTTPServer, test
+
+# Simple usage - serve current directory
+test(HandlerClass=SimpleHttpRequestHandler, port=8080)
+
+# Serve a specific directory
+test(
+    HandlerClass=SimpleHttpRequestHandler,
+    port=8080,
+    directory="/path/to/serve"
+)
 ```
 
 ## Development
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- Python 3.11 or higher
 - pip
 
 ### Setup
@@ -114,9 +149,10 @@ make build         # Build distribution packages
 ```
 simple-http-server/
 ├── src/
-│   └── simple_http_server/     # Main package
-│       ├── __init__.py
-│       └── main.py
+│   └── http/                    # Main package
+│       ├── __init__.py          # HTTPStatus, HTTPMethod enums
+│       ├── client.py            # HTTP client (placeholder)
+│       └── server.py            # HTTPServer, BaseHTTPRequestHandler, SimpleHttpRequestHandler
 ├── tests/                       # Test files
 │   ├── __init__.py
 │   └── test_main.py
