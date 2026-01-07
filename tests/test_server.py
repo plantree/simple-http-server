@@ -5,7 +5,6 @@ import os
 import socket
 import tempfile
 import threading
-import time
 from http import HTTPStatus
 from http.server import (
     BaseHTTPRequestHandler,
@@ -13,9 +12,7 @@ from http.server import (
     SimpleHttpRequestHandler,
     _get_best_family,
 )
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 
 def http_request(host, port, method="GET", path="/", headers=None):

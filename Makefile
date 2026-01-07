@@ -3,7 +3,6 @@
 help:
 	@echo "Available commands:"
 	@echo "  make install       Install production dependencies"
-	@echo "  make install-dev   Install development dependencies"
 	@echo "  make test          Run tests with coverage"
 	@echo "  make lint          Run linters (flake8, mypy, pylint)"
 	@echo "  make format        Format code with black and isort"
@@ -13,15 +12,11 @@ help:
 install:
 	pip install -r requirements.txt
 
-install-dev:
-	pip install -r requirements-dev.txt
-	pip install -e .
-
 test:
 	pytest
 
 run:
-	python3.11 -m src.http.server 8002
+	python -m src.http.server 8002
 
 lint:
 	flake8 src tests

@@ -2,8 +2,6 @@
 
 from http import HTTPStatus
 
-import pytest
-
 
 class TestHTTPStatus:
     """Test cases for HTTPStatus enum."""

@@ -9,6 +9,8 @@ import mimetypes
 import os
 import posixpath
 import shutil
+import socket
+import socketserver
 import sys
 import time
 import typing
@@ -41,9 +43,6 @@ DEFAULT_ERROR_MESSAGE = """\
 """
 
 DEFAULT_ERROR_CONTENT_TYPE = "text/html;charset=utf-8"
-
-import socket
-import socketserver
 
 
 class HTTPServer(socketserver.TCPServer):
@@ -500,7 +499,7 @@ class SimpleHttpRequestHandler(BaseHTTPRequestHandler):
             self.send_header("Last-Modified", self.date_time_string(fs.st_mtime))
             self.end_headers()
             return f
-        except:
+        except Exception:
             f.close()
             raise
 
@@ -525,7 +524,7 @@ class SimpleHttpRequestHandler(BaseHTTPRequestHandler):
 
         enc = sys.getfilesystemencoding()
         title = f"Directory listing for {displaypath}"
-        r.append(f"<!DOCTYPE HTML>")
+        r.append("<!DOCTYPE HTML>")
         r.append('<html lang="en">')
         r.append("<head>")
         r.append(f'<meta charset="{enc}">')

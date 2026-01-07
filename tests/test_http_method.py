@@ -2,8 +2,6 @@
 
 from http import HTTPMethod
 
-import pytest
-
 
 class TestHTTPMethod:
     """Test cases for HTTPMethod enum."""

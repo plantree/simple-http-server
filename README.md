@@ -28,16 +28,13 @@ cd simple-http-server
 # Create a virtual environment
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install in development mode
-pip install -e .
 ```
 
 ### For Development
 
 ```bash
 # Install development dependencies
-make install-dev
+make install
 ```
 
 ## Usage
@@ -46,16 +43,16 @@ make install-dev
 
 ```bash
 # Start the server on default port 8080
-python -m http
+python -m src.http.server
 
 # Specify a custom port
-python -m http 3000
+python -m src.http.server 3000
 
 # Bind to a specific address
-python -m http -b 127.0.0.1 8080
+python -m src.http.server -b 127.0.0.1 8080
 
 # Serve a specific directory
-python -m http -d /path/to/serve 8080
+python -m src.http.server -d /path/to/serve 8080
 ```
 
 ### Command Line Options
@@ -65,22 +62,6 @@ python -m http -d /path/to/serve 8080
 | `port` | Port number (default: 8080) |
 | `-b`, `--bind` | Bind to specific address (default: all interfaces) |
 | `-d`, `--directory` | Directory to serve (default: current directory) |
-
-### Programmatic Usage
-
-```python
-from http.server import SimpleHttpRequestHandler, HTTPServer, test
-
-# Simple usage - serve current directory
-test(HandlerClass=SimpleHttpRequestHandler, port=8080)
-
-# Serve a specific directory
-test(
-    HandlerClass=SimpleHttpRequestHandler,
-    port=8080,
-    directory="/path/to/serve"
-)
-```
 
 ## Development
 
@@ -96,7 +77,7 @@ test(
 3. Install development dependencies:
 
 ```bash
-make install-dev
+make install
 ```
 
 ### Running Tests
@@ -136,7 +117,6 @@ pylint src
 ```bash
 make help          # Show available commands
 make install       # Install production dependencies
-make install-dev   # Install development dependencies
 make test          # Run tests with coverage
 make lint          # Run all linters
 make format        # Format code
@@ -165,9 +145,7 @@ simple-http-server/
 ├── Makefile                     # Development commands
 ├── pyproject.toml               # Project configuration
 ├── README.md                    # This file
-├── requirements.txt             # Production dependencies
-├── requirements-dev.txt         # Development dependencies
-└── setup.py                     # Package setup
+├── requirements.txt             # Development dependencies
 ```
 
 ## Contributing

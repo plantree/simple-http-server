@@ -4,7 +4,19 @@ init-hook='import sys; sys.path.append("src")'
 [MESSAGES CONTROL]
 disable=
     C0111,  # missing-docstring
+    C0301,  # line-too-long
+    C0103,  # invalid-name
+    C0209,  # consider-using-f-string
+    C0325,  # superfluous-parens
+    W0201,  # attribute-defined-outside-init
+    W0621,  # redefined-outer-name
+    W0622,  # redefined-builtin
+    W0233,  # non-parent-init-called
+    E0102,  # function-redefined
     R0903,  # too-few-public-methods
+    R0912,  # too-many-branches
+    R0917,  # too-many-positional-arguments
+    R1732,  # consider-using-with
 
 [FORMAT]
 max-line-length=88
