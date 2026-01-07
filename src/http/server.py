@@ -431,16 +431,13 @@ class SimpleHttpRequestHandler(BaseHTTPRequestHandler):
         f = None
 
         if os.path.isdir(path):
-            parts = urllib.parse.urlsplit(path)
-            print(parts)
+            parts = urllib.parse.urlsplit(self.path)
             if not parts.path.endswith(("/", "%2f", "%2F")):
                 # redirect browser - doing basically what apache does
                 self.send_response(HTTPStatus.MOVED_PERMANENTLY)
                 new_parts = (parts[0], parts[1], parts[2] + "/", parts[3], parts[4])
                 new_url = urllib.parse.urlunsplit(new_parts)
-                print(new_url)
                 self.send_header("Location", new_url)
-                self.send_header("Content-Length", "0")
                 self.end_headers()
                 return None
 
@@ -548,7 +545,7 @@ class SimpleHttpRequestHandler(BaseHTTPRequestHandler):
             if os.path.islink(fullname):
                 displayname = name + "@"
             path = urllib.parse.quote(linkname, errors="surrogatepass")
-            r.append(f'<li><a href="{path}">{html.escape(displayname)}</a></li>')
+            r.append(f'<li><a href="{linkname}">{html.escape(displayname)}</a></li>')
         r.append("</ul>\n<hr>\n</body>\n</html>\n")
         encoded = "\n".join(r).encode(enc, "surrogateescape")
 
@@ -564,9 +561,7 @@ class SimpleHttpRequestHandler(BaseHTTPRequestHandler):
         return f
 
     def translate_path(self, path: str) -> str:
-        """Translate a /-separated PATH to the local filename syntex."""
-        if os.path.abspath(path):
-            return path
+        """Translate a /-separated PATH to the local filename syntax."""
         # abandon query parameters
         path = path.split("#", 1)[0]
         path = path.split("?", 1)[0]
