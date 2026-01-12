@@ -30,13 +30,6 @@ python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-### For Development
-
-```bash
-# Install development dependencies
-make install
-```
-
 ## Usage
 
 ### Command Line

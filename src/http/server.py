@@ -1,5 +1,6 @@
 """HTTP server classes."""
 
+import contextlib
 import datetime
 import email
 import http
@@ -59,7 +60,46 @@ class HTTPServer(socketserver.TCPServer):
         self.server_name = socket.getfqdn(host)
         self.server_port = port
 
+class ThreadingHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
+    """This class allows to handle requests in separate threads."""
+    daemon_threads = True
 
+class HTTPSServer(HTTPServer):
+    """HTTP server class with SSL support."""
+    def __init__(self, server_address, RequestHandlerClass, bind_and_activate=True, *, certifile, keyfile=None, password=None, alpn_protocols=None):
+        try:
+            import ssl
+        except ImportError:
+            raise RuntimeError("SSL support requires the 'ssl' module")
+    
+        self.ssl = ssl
+        self.certifile = certifile
+        self.keyfile = keyfile
+        self.password = password
+        # support by default HTTP/1.1
+        self.alpn_protocols = (
+            ["http/1.1"] if alpn_protocols is None else alpn_protocols
+        )
+
+        super().__init__(server_address, RequestHandlerClass, bind_and_activate)
+    
+    def server_activate(self):
+        """Wrap the socket in SSLSocket."""
+        super().server_activate()
+        context = self._create_context()
+        self.socket = context.wrap_socket(self.socket, server_side=True)
+    
+    def _create_context(self):
+        """Create a secure SSL context."""
+        context = self.ssl.create_default_context(self.ssl.Purpose.CLIENT_AUTH)
+        context.load_cert_chain(self.certifile, self.keyfile, self.password)
+        context.set_alpn_protocols(self.alpn_protocols)
+        return context
+
+class ThreadingHTTPSServer(socketserver.ThreadingMixIn, HTTPSServer):
+    """This class allows to handle HTTPS requests in separate threads."""
+    daemon_threads = True
+        
 class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
     """A base class for HTTP request handler."""
 
@@ -214,7 +254,6 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
             message = shormsg
         if explain is None:
             explain = longmsg
-        self.log_error(f"code: {code}, message: {message}")
 
         self.send_response(code, message)
         self.send_header("Connection", "close")
@@ -430,16 +469,6 @@ class SimpleHttpRequestHandler(BaseHTTPRequestHandler):
         f = None
 
         if os.path.isdir(path):
-            parts = urllib.parse.urlsplit(self.path)
-            if not parts.path.endswith(("/", "%2f", "%2F")):
-                # redirect browser - doing basically what apache does
-                self.send_response(HTTPStatus.MOVED_PERMANENTLY)
-                new_parts = (parts[0], parts[1], parts[2] + "/", parts[3], parts[4])
-                new_url = urllib.parse.urlunsplit(new_parts)
-                self.send_header("Location", new_url)
-                self.end_headers()
-                return None
-
             for index in self.index_pages:
                 index_path = os.path.join(path, index)
                 if os.path.exists(index_path):
@@ -536,11 +565,12 @@ class SimpleHttpRequestHandler(BaseHTTPRequestHandler):
         r.append("<hr>\n<ul>")
         for name in list:
             fullname = os.path.join(path, name)
-            displayname = linkname = name
+            linkname = os.path.join(self.path, name)
+            displayname = name
             # Append / for directories or @ for symbolic links
             if os.path.isdir(fullname):
                 displayname = name + "/"
-                linkname = name + "/"
+                linkname += "/"
             if os.path.islink(fullname):
                 displayname = name + "@"
             path = urllib.parse.quote(linkname, errors="surrogatepass")
@@ -620,6 +650,9 @@ def test(
     port=8000,
     bind=None,
     directory=None,
+    tls_cert=None,
+    tls_key=None,
+    tls_password=None,
 ):
     """Test the HTTP request handler class."""
     ServerClass.address_family, addr = _get_best_family(bind, port)
@@ -629,7 +662,10 @@ def test(
     if directory:
         HandlerClass = partial(HandlerClass, directory=directory)
 
-    server = ServerClass(addr, HandlerClass)
+    if tls_cert:
+        server = ServerClass(addr, HandlerClass, certifile=tls_cert, keyfile=tls_key, password=tls_password)
+    else:
+        server = ServerClass(addr, HandlerClass)
 
     with server as httpd:
         host, port = httpd.server_address[:2]
@@ -668,15 +704,65 @@ if __name__ == "__main__":
         default=os.getcwd(),
         help="serve this directory (default: current directory)",
     )
+    parser.add_argument(
+        "--tls-cert",
+        metavar="PATH",
+        help="path to TLS certificate file (enables HTTPS)",
+    )
+    parser.add_argument(
+        "--tls-key",
+        metavar="PATH",
+        help="path to TLS private key file (if not specified, --tls-cert is used)",
+    )
+    parser.add_argument(
+        "--tls-password-file",
+        metavar="PATH",
+        help="path to TLS private key password file",
+    )
 
     args = parser.parse_args()
+
+    if not args.tls_cert and args.tls_key:
+        parser.error("--tls-key requires --tls-cert to be specified")
+
+    tls_key_password = None
+    if args.tls_password_file:
+        if not args.tls_cert:
+            parser.error("--tls-password-file requires --tls-cert to be specified")
+        try:
+            with open(args.tls_password_file, "r", encoding="utf-8") as f:
+                tls_key_password = f.read().strip()
+        except OSError as e:
+            parser.error(f"Could not read TLS password file: {e}")
+
+    class DualStackServerMixin:
+        def server_bind(self):
+            with contextlib.suppress(Exception):
+                self.socket.setsockopt(
+                    socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0
+                )
+            return super().server_bind()
+        
+        def finish_request(self, request, client_address):
+            """Finish one request by instantiating RequestHandlerClass."""
+            self.RequestHandlerClass(request, client_address, self, directory=args.directory)
+    
+    class HTTPDualStackServer(DualStackServerMixin, HTTPServer):
+        pass
+    class HTTPSDualStackServer(DualStackServerMixin, HTTPSServer):
+        pass
+
+    ServerClass = HTTPSDualStackServer if args.tls_cert else HTTPDualStackServer
 
     handle_class = SimpleHttpRequestHandler
 
     test(
         HandlerClass=handle_class,
-        ServerClass=HTTPServer,
+        ServerClass=ServerClass,
         port=args.port,
         bind=args.bind,
         directory=args.directory,
+        tls_cert=args.tls_cert,
+        tls_key=args.tls_key,
+        tls_password=tls_key_password,
     )
