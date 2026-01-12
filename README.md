@@ -13,7 +13,8 @@ This project provides a lightweight and easy-to-use HTTP server implementation i
 - 🔧 Easy to extend and customize
 - 📂 Static file serving with directory listing
 - 🔄 HTTP/1.1 with keep-alive support
-- 📝 Type hints for better IDE support
+- � HTTPS/TLS support with certificate configuration
+- �📝 Type hints for better IDE support
 - 🧪 Well-tested with comprehensive test coverage
 
 ## Installation
@@ -48,6 +49,21 @@ python -m src.http.server -b 127.0.0.1 8080
 python -m src.http.server -d /path/to/serve 8080
 ```
 
+### HTTPS Support
+
+```bash
+# Generate a self-signed certificate (for development)
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
+
+# Start HTTPS server
+python -m src.http.server --tls-cert cert.pem --tls-key key.pem 8443
+
+# With password-protected key
+python -m src.http.server --tls-cert cert.pem --tls-key key.pem --tls-password-file password.txt 8443
+```
+
+> **Note:** Self-signed certificates will show browser warnings. For production, use certificates from a trusted CA like [Let's Encrypt](https://letsencrypt.org/).
+
 ### Command Line Options
 
 | Option | Description |
@@ -55,6 +71,9 @@ python -m src.http.server -d /path/to/serve 8080
 | `port` | Port number (default: 8080) |
 | `-b`, `--bind` | Bind to specific address (default: all interfaces) |
 | `-d`, `--directory` | Directory to serve (default: current directory) |
+| `--tls-cert` | Path to TLS certificate file (enables HTTPS) |
+| `--tls-key` | Path to TLS private key file |
+| `--tls-password-file` | Path to file containing TLS key password |
 
 ## Development
 

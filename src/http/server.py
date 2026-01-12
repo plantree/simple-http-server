@@ -60,35 +60,47 @@ class HTTPServer(socketserver.TCPServer):
         self.server_name = socket.getfqdn(host)
         self.server_port = port
 
+
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
     """This class allows to handle requests in separate threads."""
+
     daemon_threads = True
+
 
 class HTTPSServer(HTTPServer):
     """HTTP server class with SSL support."""
-    def __init__(self, server_address, RequestHandlerClass, bind_and_activate=True, *, certifile, keyfile=None, password=None, alpn_protocols=None):
+
+    def __init__(
+        self,
+        server_address,
+        RequestHandlerClass,
+        bind_and_activate=True,
+        *,
+        certifile,
+        keyfile=None,
+        password=None,
+        alpn_protocols=None,
+    ):
         try:
             import ssl
         except ImportError:
             raise RuntimeError("SSL support requires the 'ssl' module")
-    
+
         self.ssl = ssl
         self.certifile = certifile
         self.keyfile = keyfile
         self.password = password
         # support by default HTTP/1.1
-        self.alpn_protocols = (
-            ["http/1.1"] if alpn_protocols is None else alpn_protocols
-        )
+        self.alpn_protocols = ["http/1.1"] if alpn_protocols is None else alpn_protocols
 
         super().__init__(server_address, RequestHandlerClass, bind_and_activate)
-    
+
     def server_activate(self):
         """Wrap the socket in SSLSocket."""
         super().server_activate()
         context = self._create_context()
         self.socket = context.wrap_socket(self.socket, server_side=True)
-    
+
     def _create_context(self):
         """Create a secure SSL context."""
         context = self.ssl.create_default_context(self.ssl.Purpose.CLIENT_AUTH)
@@ -96,10 +108,13 @@ class HTTPSServer(HTTPServer):
         context.set_alpn_protocols(self.alpn_protocols)
         return context
 
+
 class ThreadingHTTPSServer(socketserver.ThreadingMixIn, HTTPSServer):
     """This class allows to handle HTTPS requests in separate threads."""
+
     daemon_threads = True
-        
+
+
 class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
     """A base class for HTTP request handler."""
 
@@ -662,16 +677,27 @@ def test(
     if directory:
         HandlerClass = partial(HandlerClass, directory=directory)
 
+    use_https = False
+
     if tls_cert:
-        server = ServerClass(addr, HandlerClass, certifile=tls_cert, keyfile=tls_key, password=tls_password)
+        server = ServerClass(
+            addr,
+            HandlerClass,
+            certifile=tls_cert,
+            keyfile=tls_key,
+            password=tls_password,
+        )
+        use_https = True
     else:
         server = ServerClass(addr, HandlerClass)
 
     with server as httpd:
         host, port = httpd.server_address[:2]
         url_host = f"[{host}]" if ":" in host else host
-        protocol = "HTTP"
-        print(f"Serving HTTP on {url_host} port {port} (http://{url_host}:{port}/) ...")
+        protocol = "HTTPS" if use_https else "HTTP"
+        print(
+            f"Serving {protocol} on {url_host} port {port} ({protocol.lower()}://{url_host}:{port}/) ..."
+        )
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
@@ -738,17 +764,18 @@ if __name__ == "__main__":
     class DualStackServerMixin:
         def server_bind(self):
             with contextlib.suppress(Exception):
-                self.socket.setsockopt(
-                    socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0
-                )
+                self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
             return super().server_bind()
-        
+
         def finish_request(self, request, client_address):
             """Finish one request by instantiating RequestHandlerClass."""
-            self.RequestHandlerClass(request, client_address, self, directory=args.directory)
-    
+            self.RequestHandlerClass(
+                request, client_address, self, directory=args.directory
+            )
+
     class HTTPDualStackServer(DualStackServerMixin, HTTPServer):
         pass
+
     class HTTPSDualStackServer(DualStackServerMixin, HTTPSServer):
         pass
 
