@@ -3,16 +3,19 @@
 import io
 import os
 import socket
+import ssl
 import tempfile
 import threading
 from http import HTTPStatus
 from http.server import (
     BaseHTTPRequestHandler,
     HTTPServer,
+    HTTPSServer,
     SimpleHttpRequestHandler,
+    ThreadingHTTPSServer,
     _get_best_family,
 )
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 
 def http_request(host, port, method="GET", path="/", headers=None):
@@ -557,3 +560,311 @@ def create_mock_handler(directory):
     handler.rfile = io.BytesIO()
 
     return handler
+
+
+def generate_self_signed_cert(cert_path, key_path):
+    """Generate a self-signed certificate for testing."""
+    from subprocess import DEVNULL, run
+
+    run(
+        [
+            "openssl",
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-keyout",
+            key_path,
+            "-out",
+            cert_path,
+            "-days",
+            "1",
+            "-nodes",
+            "-subj",
+            "/CN=localhost",
+        ],
+        check=True,
+        stdout=DEVNULL,
+        stderr=DEVNULL,
+    )
+
+
+def https_request(host, port, method="GET", path="/", headers=None):
+    """Make a raw HTTPS request using SSL sockets."""
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(5)
+    ssl_sock = context.wrap_socket(sock, server_hostname=host)
+    try:
+        ssl_sock.connect((host, port))
+        request_lines = [f"{method} {path} HTTP/1.1"]
+        request_lines.append(f"Host: {host}:{port}")
+        request_lines.append("Connection: close")
+        if headers:
+            for key, value in headers.items():
+                request_lines.append(f"{key}: {value}")
+        request_lines.append("")
+        request_lines.append("")
+        request = "\r\n".join(request_lines)
+        ssl_sock.sendall(request.encode())
+
+        response = b""
+        while True:
+            chunk = ssl_sock.recv(4096)
+            if not chunk:
+                break
+            response += chunk
+        return response.decode("utf-8", errors="replace")
+    finally:
+        ssl_sock.close()
+
+
+class TestHTTPSServer:
+    """Test cases for HTTPSServer class."""
+
+    def test_https_server_stores_ssl_attributes(self):
+        """Test that HTTPSServer stores SSL configuration attributes."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cert_file = os.path.join(tmpdir, "cert.pem")
+            key_file = os.path.join(tmpdir, "key.pem")
+            generate_self_signed_cert(cert_file, key_file)
+
+            server = HTTPSServer(
+                ("127.0.0.1", 0),
+                BaseHTTPRequestHandler,
+                bind_and_activate=False,
+                certifile=cert_file,
+                keyfile=key_file,
+                password=None,
+            )
+
+            assert server.certifile == cert_file
+            assert server.keyfile == key_file
+            assert server.password is None
+            assert server.alpn_protocols == ["http/1.1"]
+            server.server_close()
+
+    def test_https_server_custom_alpn_protocols(self):
+        """Test that HTTPSServer accepts custom ALPN protocols."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cert_file = os.path.join(tmpdir, "cert.pem")
+            key_file = os.path.join(tmpdir, "key.pem")
+            generate_self_signed_cert(cert_file, key_file)
+
+            custom_protocols = ["h2", "http/1.1"]
+            server = HTTPSServer(
+                ("127.0.0.1", 0),
+                BaseHTTPRequestHandler,
+                bind_and_activate=False,
+                certifile=cert_file,
+                keyfile=key_file,
+                alpn_protocols=custom_protocols,
+            )
+
+            assert server.alpn_protocols == custom_protocols
+            server.server_close()
+
+    def test_https_server_inherits_from_httpserver(self):
+        """Test that HTTPSServer inherits from HTTPServer."""
+        assert issubclass(HTTPSServer, HTTPServer)
+
+    def test_https_server_has_allow_reuse_address(self):
+        """Test that HTTPSServer inherits allow_reuse_address."""
+        assert HTTPSServer.allow_reuse_address is True
+
+    def test_https_server_create_context(self):
+        """Test that HTTPSServer._create_context creates an SSL context."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cert_file = os.path.join(tmpdir, "cert.pem")
+            key_file = os.path.join(tmpdir, "key.pem")
+            generate_self_signed_cert(cert_file, key_file)
+
+            server = HTTPSServer(
+                ("127.0.0.1", 0),
+                BaseHTTPRequestHandler,
+                bind_and_activate=False,
+                certifile=cert_file,
+                keyfile=key_file,
+            )
+
+            context = server._create_context()
+            assert isinstance(context, ssl.SSLContext)
+            server.server_close()
+
+
+class TestThreadingHTTPSServer:
+    """Test cases for ThreadingHTTPSServer class."""
+
+    def test_threading_https_server_inherits_from_https_server(self):
+        """Test that ThreadingHTTPSServer inherits from HTTPSServer."""
+        assert issubclass(ThreadingHTTPSServer, HTTPSServer)
+
+    def test_threading_https_server_has_daemon_threads(self):
+        """Test that ThreadingHTTPSServer has daemon_threads set to True."""
+        assert ThreadingHTTPSServer.daemon_threads is True
+
+    def test_threading_https_server_creation(self):
+        """Test that ThreadingHTTPSServer can be created."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cert_file = os.path.join(tmpdir, "cert.pem")
+            key_file = os.path.join(tmpdir, "key.pem")
+            generate_self_signed_cert(cert_file, key_file)
+
+            server = ThreadingHTTPSServer(
+                ("127.0.0.1", 0),
+                BaseHTTPRequestHandler,
+                bind_and_activate=False,
+                certifile=cert_file,
+                keyfile=key_file,
+            )
+
+            assert server is not None
+            server.server_close()
+
+
+class TestHTTPSIntegration:
+    """Integration tests for HTTPS server."""
+
+    def test_https_serve_file(self):
+        """Test serving a file over HTTPS."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Generate self-signed certificate
+            cert_file = os.path.join(tmpdir, "cert.pem")
+            key_file = os.path.join(tmpdir, "key.pem")
+            generate_self_signed_cert(cert_file, key_file)
+
+            # Create a test file
+            test_content = b"Hello, HTTPS World!"
+            test_file = os.path.join(tmpdir, "test.txt")
+            with open(test_file, "wb") as f:
+                f.write(test_content)
+
+            # Start HTTPS server
+            server = HTTPSServer(
+                ("127.0.0.1", 0),
+                lambda *args, **kwargs: SimpleHttpRequestHandler(
+                    *args, directory=tmpdir, **kwargs
+                ),
+                certifile=cert_file,
+                keyfile=key_file,
+            )
+            port = server.server_address[1]
+
+            thread = threading.Thread(target=server.handle_request)
+            thread.start()
+
+            try:
+                response = https_request("127.0.0.1", port, path="/test.txt")
+                status, headers, body = parse_response(response)
+                assert status == 200
+                assert test_content.decode() in body
+            finally:
+                thread.join(timeout=5)
+                server.server_close()
+
+    def test_https_serve_index_html(self):
+        """Test serving index.html over HTTPS."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Generate self-signed certificate
+            cert_file = os.path.join(tmpdir, "cert.pem")
+            key_file = os.path.join(tmpdir, "key.pem")
+            generate_self_signed_cert(cert_file, key_file)
+
+            # Create index.html
+            test_content = b"<html><body>HTTPS Index</body></html>"
+            index_file = os.path.join(tmpdir, "index.html")
+            with open(index_file, "wb") as f:
+                f.write(test_content)
+
+            # Start HTTPS server
+            server = HTTPSServer(
+                ("127.0.0.1", 0),
+                lambda *args, **kwargs: SimpleHttpRequestHandler(
+                    *args, directory=tmpdir, **kwargs
+                ),
+                certifile=cert_file,
+                keyfile=key_file,
+            )
+            port = server.server_address[1]
+
+            thread = threading.Thread(target=server.handle_request)
+            thread.start()
+
+            try:
+                response = https_request("127.0.0.1", port, path="/")
+                status, headers, body = parse_response(response)
+                assert status == 200
+                assert test_content.decode() in body
+            finally:
+                thread.join(timeout=5)
+                server.server_close()
+
+    def test_https_404_not_found(self):
+        """Test 404 response over HTTPS."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Generate self-signed certificate
+            cert_file = os.path.join(tmpdir, "cert.pem")
+            key_file = os.path.join(tmpdir, "key.pem")
+            generate_self_signed_cert(cert_file, key_file)
+
+            # Start HTTPS server with empty directory
+            server = HTTPSServer(
+                ("127.0.0.1", 0),
+                lambda *args, **kwargs: SimpleHttpRequestHandler(
+                    *args, directory=tmpdir, **kwargs
+                ),
+                certifile=cert_file,
+                keyfile=key_file,
+            )
+            port = server.server_address[1]
+
+            thread = threading.Thread(target=server.handle_request)
+            thread.start()
+
+            try:
+                response = https_request("127.0.0.1", port, path="/nonexistent.txt")
+                status, headers, body = parse_response(response)
+                assert status == 404
+            finally:
+                thread.join(timeout=5)
+                server.server_close()
+
+    def test_threading_https_serve_file(self):
+        """Test serving a file using ThreadingHTTPSServer."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Generate self-signed certificate
+            cert_file = os.path.join(tmpdir, "cert.pem")
+            key_file = os.path.join(tmpdir, "key.pem")
+            generate_self_signed_cert(cert_file, key_file)
+
+            # Create a test file
+            test_content = b"Hello, Threading HTTPS!"
+            test_file = os.path.join(tmpdir, "test.txt")
+            with open(test_file, "wb") as f:
+                f.write(test_content)
+
+            # Start Threading HTTPS server
+            server = ThreadingHTTPSServer(
+                ("127.0.0.1", 0),
+                lambda *args, **kwargs: SimpleHttpRequestHandler(
+                    *args, directory=tmpdir, **kwargs
+                ),
+                certifile=cert_file,
+                keyfile=key_file,
+            )
+            port = server.server_address[1]
+
+            thread = threading.Thread(target=server.handle_request)
+            thread.start()
+
+            try:
+                response = https_request("127.0.0.1", port, path="/test.txt")
+                status, headers, body = parse_response(response)
+                assert status == 200
+                assert test_content.decode() in body
+            finally:
+                thread.join(timeout=5)
+                server.server_close()
