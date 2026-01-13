@@ -661,8 +661,10 @@ def _get_best_family(
 
 
 def test(
-    HandlerClass: typing.Type[BaseHTTPRequestHandler] = BaseHTTPRequestHandler,
-    ServerClass: typing.Type[HTTPServer] = HTTPServer,
+    HandlerClass: typing.Type[
+        socketserver.StreamRequestHandler
+    ] = BaseHTTPRequestHandler,
+    ServerClass: typing.Type[socketserver.TCPServer] = ThreadingHTTPServer,
     protocol: str = "HTTP/1.1",
     port: int = 8000,
     bind: typing.Optional[str] = None,
@@ -777,10 +779,10 @@ if __name__ == "__main__":
                 request, client_address, self, directory=args.directory
             )
 
-    class HTTPDualStackServer(DualStackServerMixin, HTTPServer):
+    class HTTPDualStackServer(DualStackServerMixin, ThreadingHTTPServer):
         pass
 
-    class HTTPSDualStackServer(DualStackServerMixin, HTTPSServer):
+    class HTTPSDualStackServer(DualStackServerMixin, ThreadingHTTPServer):
         pass
 
     ServerClass = HTTPSDualStackServer if args.tls_cert else HTTPDualStackServer
