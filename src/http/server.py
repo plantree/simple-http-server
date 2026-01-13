@@ -647,7 +647,9 @@ class SimpleHttpRequestHandler(BaseHTTPRequestHandler):
         return "application/octet-stream"
 
 
-def _get_best_family(*address):
+def _get_best_family(
+    *address: typing.Union[str, int]
+) -> typing.Tuple[int, typing.Tuple]:
     """Get the best address family for the given address."""
     infos = socket.getaddrinfo(
         *address,
@@ -659,15 +661,15 @@ def _get_best_family(*address):
 
 
 def test(
-    HandlerClass=BaseHTTPRequestHandler,
-    ServerClass=HTTPServer,
-    protocol="HTTP/1.1",
-    port=8000,
-    bind=None,
-    directory=None,
-    tls_cert=None,
-    tls_key=None,
-    tls_password=None,
+    HandlerClass: typing.Type[BaseHTTPRequestHandler] = BaseHTTPRequestHandler,
+    ServerClass: typing.Type[HTTPServer] = HTTPServer,
+    protocol: str = "HTTP/1.1",
+    port: int = 8000,
+    bind: typing.Optional[str] = None,
+    directory: typing.Optional[str] = None,
+    tls_cert: typing.Optional[str] = None,
+    tls_key: typing.Optional[str] = None,
+    tls_password: typing.Optional[str] = None,
 ):
     """Test the HTTP request handler class."""
     ServerClass.address_family, addr = _get_best_family(bind, port)
@@ -767,7 +769,9 @@ if __name__ == "__main__":
                 self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
             return super().server_bind()
 
-        def finish_request(self, request, client_address):
+        def finish_request(
+            self, request: socket.socket, client_address: typing.Tuple[str, int]
+        ) -> None:
             """Finish one request by instantiating RequestHandlerClass."""
             self.RequestHandlerClass(
                 request, client_address, self, directory=args.directory
