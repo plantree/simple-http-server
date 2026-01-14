@@ -183,6 +183,12 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
             )
             return False
 
+        # According to RFC 7230, a HTTP/1.1 request MUST include a Host header field.
+        host = self.headers.get("Host")
+        if host is None:
+            self.send_error(HTTPStatus.BAD_REQUEST, "Bad request: Host header missing")
+            return False
+
         conntype = self.headers.get("Connection", "")
         if conntype.lower() == "close":
             self.close_connection = True
