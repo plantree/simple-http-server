@@ -64,7 +64,11 @@ class BaseServer:
         """Activate the server. May be overridden."""
         pass
 
-    def server_forever(self, poll_interval=0.5) -> None:
+    def get_request(self) -> tuple[socket.socket, tuple]:
+        """Get the request and client address from the socket. May be overridden."""
+        raise NotImplementedError("Must be overridden by subclass.")
+
+    def serve_forever(self, poll_interval=0.5) -> None:
         """Handle one request at a time until shutdown."""
         self.__is_shut_down.clear()
 
@@ -92,12 +96,15 @@ class BaseServer:
     def service_actions(self) -> None:
         """Called by the serve_forever() loop to perform periodic actions.
 
-        Maybe overridden byu a subclass / Mixin.
+        Maybe overridden by a subclass / Mixin.
         """
         pass
 
     def handle_request(self) -> None:
-        """Handle one request, possibly blocking."""
+        """Handle one request, possibly blocking.
+
+        If you do not use serve_forever(), you need to call this function yourself.
+        """
         timeout = self.socket.gettimeout()
         if timeout is None:
             timeout = self.timeout
@@ -182,13 +189,20 @@ class BaseServer:
         print("-" * 40, file=sys.stderr)
 
     def __enter__(self):
+        """Support for with-statement context manager."""
         return self
 
-    def __exit__(self):
+    def __exit__(
+        self,
+        exc_type,
+        exc_value,
+        traceback,
+    ):
+        """Support for with-statement context manager."""
         self.server_close()
 
 
-class TcpServer(BaseServer):
+class TCPServer(BaseServer):
     """Base class for various socket-based server classes."""
 
     address_family: int = socket.AF_INET
@@ -253,7 +267,7 @@ class TcpServer(BaseServer):
         self.close_request(request)
 
 
-class UDPServer(TcpServer):
+class UDPServer(TCPServer):
     """UDP server class."""
 
     allow_reuse_address: bool = False
@@ -347,7 +361,7 @@ if hasattr(os, "fork"):
                 return
             else:
                 # child process
-                status: int = 1
+                status = 1
                 try:
                     self.finish_request(request, client_address)
                     status = 0
@@ -439,15 +453,21 @@ class ThreadingMixIn:
 
 if hasattr(os, "fork"):
 
+    class ForkingTCPServer(ForkingMixIn, TCPServer):
+        """TCP server class with ForkingMixIn."""
+
+        pass
+
     class ForkingUDPServer(ForkingMixIn, UDPServer):
         """UDP server class with ForkingMixIn."""
 
         pass
 
-    class ForkingTCPServer(ForkingMixIn, TcpServer):
-        """TCP server class with ForkingMixIn."""
 
-        pass
+class ThreadingTCPServer(ThreadingMixIn, TCPServer):
+    """TCP server class with ThreadingMixIn."""
+
+    pass
 
 
 class ThreadingUDPServer(ThreadingMixIn, UDPServer):
@@ -456,15 +476,9 @@ class ThreadingUDPServer(ThreadingMixIn, UDPServer):
     pass
 
 
-class ThreadingTCPServer(ThreadingMixIn, TcpServer):
-    """TCP server class with ThreadingMixIn."""
-
-    pass
-
-
 if hasattr(socket, "AF_UNIX"):
 
-    class UnixStreamServer(TcpServer):
+    class UnixStreamServer(TCPServer):
         """Unix domain stream server class."""
 
         address_family: int = socket.AF_UNIX
@@ -519,10 +533,13 @@ class BaseRequestHandler:
 class StreamRequestHandler(BaseRequestHandler):
     """Define self.rfile and self.wfile for stream (TCP) requests."""
 
+    # Buffer sizes for rfile and wfile.
     rbufsize: int = -1
     wbufsize: int = 0
 
+    # Optional timeout for the connection.
     timeout: float | None = None
+    # Disable Nagle's algorithm for the connection.
     disable_nagle_algorithm: bool = False
 
     def setup(self) -> None:

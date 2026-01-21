@@ -11,7 +11,6 @@ import os
 import posixpath
 import shutil
 import socket
-import socketserver
 import sys
 import time
 import typing
@@ -19,6 +18,7 @@ import urllib
 from functools import partial
 from pydoc import html
 
+from ..socket import socketserver
 from . import HTTPStatus, __author__, __version__
 
 # Default error message template
