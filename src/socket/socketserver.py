@@ -208,6 +208,7 @@ class TCPServer(BaseServer):
     address_family: int = socket.AF_INET
     socket_type: int = socket.SOCK_STREAM
     request_queue_size: int = 5
+    timeout: float | None = None
 
     allow_reuse_address: bool = False
     allow_reuse_port: bool = False
