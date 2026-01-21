@@ -141,13 +141,19 @@ make build         # Build distribution packages
 ```
 simple-http-server/
 ├── src/
-│   └── http/                    # Main package
-│       ├── __init__.py          # HTTPStatus, HTTPMethod enums
-│       ├── client.py            # HTTP client (placeholder)
-│       └── server.py            # HTTPServer, BaseHTTPRequestHandler, SimpleHttpRequestHandler
+│   ├── http/                    # HTTP package
+│   │   ├── __init__.py          # HTTPStatus, HTTPMethod enums
+│   │   ├── client.py            # HTTP client (placeholder)
+│   │   └── server.py            # HTTPServer, BaseHTTPRequestHandler, SimpleHttpRequestHandler
+│   └── socket/                  # Socket server package
+│       ├── __init__.py          # Package exports
+│       └── socketserver.py      # TCPServer, UDPServer, ThreadingMixIn, ForkingMixIn, etc.
 ├── tests/                       # Test files
 │   ├── __init__.py
-│   └── test_main.py
+│   ├── test_http_method.py
+│   ├── test_http_status.py
+│   ├── test_server.py
+│   └── test_socketserver.py
 ├── .flake8                      # Flake8 configuration
 ├── .gitignore                   # Git ignore rules
 ├── .pylintrc                    # Pylint configuration
@@ -200,3 +206,4 @@ This project is inspired by Python's built-in [`http.server`](https://docs.pytho
 ## Reference
 
 - https://github.com/python/cpython/blob/3.14/Lib/http/server.py
+- https://github.com/python/cpython/blob/3.14/Lib/socketserver.py
