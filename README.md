@@ -13,8 +13,8 @@ This project provides a lightweight and easy-to-use HTTP server implementation i
 - 🔧 Easy to extend and customize
 - 📂 Static file serving with directory listing
 - 🔄 HTTP/1.1 with keep-alive support
-- � HTTPS/TLS support with certificate configuration
-- �📝 Type hints for better IDE support
+- 🔒 HTTPS/TLS support with certificate configuration
+- 📝 Type hints for better IDE support
 - 🧪 Well-tested with comprehensive test coverage
 
 ## Installation
@@ -88,9 +88,9 @@ python -m src.http.server --tls-cert cert.pem --tls-key key.pem --tls-password-f
 2. Create and activate a virtual environment
 3. Install development dependencies:
 
-```bash
-make install
-```
+    ```bash
+    make install
+    ```
 
 ### Running Tests
 
@@ -130,10 +130,13 @@ pylint src
 make help          # Show available commands
 make install       # Install production dependencies
 make test          # Run tests with coverage
-make lint          # Run all linters
-make format        # Format code
-make clean         # Remove build artifacts
+make lint          # Run linters (flake8, mypy, pylint)
+make format        # Format code with black and isort
+make clean         # Remove build artifacts and cache files
 make build         # Build distribution packages
+make run           # Run HTTP server on port 8002
+make run-https     # Run HTTPS server on port 8443
+make cert          # Generate self-signed certificate
 ```
 
 ## Project Structure
@@ -145,7 +148,7 @@ simple-http-server/
 │   │   ├── __init__.py          # HTTPStatus, HTTPMethod enums
 │   │   ├── client.py            # HTTP client (placeholder)
 │   │   └── server.py            # HTTPServer, BaseHTTPRequestHandler, SimpleHttpRequestHandler
-│   └── socket/                  # Socket server package
+│   └── socketserver/                  # Socket server package
 │       ├── __init__.py          # Package exports
 │       └── socketserver.py      # TCPServer, UDPServer, ThreadingMixIn, ForkingMixIn, etc.
 ├── tests/                       # Test files
@@ -157,7 +160,6 @@ simple-http-server/
 ├── .flake8                      # Flake8 configuration
 ├── .gitignore                   # Git ignore rules
 ├── .pylintrc                    # Pylint configuration
-├── CHANGELOG.md                 # Version history
 ├── CONTRIBUTING.md              # Contribution guidelines
 ├── LICENSE                      # License file
 ├── Makefile                     # Development commands
@@ -180,10 +182,6 @@ Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for det
 6. Commit your changes (`git commit -m 'Add some amazing feature'`)
 7. Push to the branch (`git push origin feature/amazing-feature`)
 8. Open a Pull Request
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for a list of changes in each version.
 
 ## License
 

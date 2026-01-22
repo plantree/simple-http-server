@@ -9,8 +9,13 @@ import selectors
 import socket
 import sys
 import threading
-from io import BufferedIOBase
+import traceback
+from io import BufferedIOBase, BytesIO
 from time import monotonic as time
+from typing import Any
+
+# Type alias for socket
+Socket = socket.socket
 
 __all__ = [
     "BaseServer",
@@ -40,6 +45,7 @@ if hasattr(socket, "AF_UNIX"):
 
 # poll/select have the advantage of not requiring any extra file descriptors
 # contrarily to epoll/kqueue (which require a single syscall)
+_Selector: type[selectors.BaseSelector]
 if hasattr(selectors, "PollSelector"):
     _Selector = selectors.PollSelector
 else:
@@ -53,6 +59,9 @@ class BaseServer:
     for starting and stopping the server, and handling requests.
     """
 
+    timeout: float | None = None
+    socket: Socket
+
     def __init__(self, server_address: tuple, RequestHandlerClass):
         """Contructor. May be extended, do not override."""
         self.server_address = server_address
@@ -62,9 +71,8 @@ class BaseServer:
 
     def server_activate(self) -> None:
         """Activate the server. May be overridden."""
-        pass
 
-    def get_request(self) -> tuple[socket.socket, tuple]:
+    def get_request(self) -> tuple[Any, tuple]:
         """Get the request and client address from the socket. May be overridden."""
         raise NotImplementedError("Must be overridden by subclass.")
 
@@ -98,7 +106,6 @@ class BaseServer:
 
         Maybe overridden by a subclass / Mixin.
         """
-        pass
 
     def handle_request(self) -> None:
         """Handle one request, possibly blocking.
@@ -119,11 +126,10 @@ class BaseServer:
             while True:
                 if selector.select(timeout):
                     return self._handle_request_noblock()
-                else:
-                    if timeout is not None:
-                        timeout = deadline - time()
-                        if timeout < 0:
-                            return self.handle_timeout()
+                if timeout is not None:
+                    timeout = deadline - time()
+                    if timeout < 0:
+                        return self.handle_timeout()
 
     def _handle_request_noblock(self) -> None:
         """Handle one request, without blocking."""
@@ -134,10 +140,10 @@ class BaseServer:
         if self.verify_request(request, client_address):
             try:
                 self.process_request(request, client_address)
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
                 self.handle_error(request, client_address)
                 self.shutdown_request(request)
-            except:
+            except BaseException:
                 self.shutdown_request(request)
                 raise
         else:
@@ -145,13 +151,14 @@ class BaseServer:
 
     def handle_timeout(self) -> None:
         """Called if no new request arrives within self.timeout. Maybe overridden."""
-        pass
 
-    def verify_request(self, request: socket.socket, client_address: tuple) -> bool:
+    def verify_request(  # pylint: disable=unused-argument
+        self, request: Any, client_address: tuple
+    ) -> bool:
         """Verify the request. May be overridden."""
         return True
 
-    def process_request(self, request: socket.socket, client_address: tuple) -> None:
+    def process_request(self, request: Any, client_address: tuple) -> None:
         """Process the request. May be overridden.
 
         Overridden by ForkingMixIn and ThreadingMixIn
@@ -161,21 +168,21 @@ class BaseServer:
 
     def server_close(self) -> None:
         """Called to clean up the server. May be overridden."""
-        pass
 
-    def finish_request(self, request: socket.socket, client_address: tuple) -> None:
+    def finish_request(self, request: Any, client_address: tuple) -> None:
         """Finish one request by instantiating RequestHandlerClass."""
         self.RequestHandlerClass(request, client_address, self)
 
-    def shutdown_request(self, request: socket.socket) -> None:
+    def shutdown_request(self, request: Any) -> None:
         """Called to shutdown and close an individual request."""
         self.close_request(request)
 
-    def close_request(self, request: socket.socket) -> None:
+    def close_request(self, request: Any) -> None:  # pylint: disable=unused-argument
         """Called to clean up an individual request."""
-        pass
 
-    def handle_error(self, request: socket.socket, client_address: tuple) -> None:
+    def handle_error(  # pylint: disable=unused-argument
+        self, request: Any, client_address: tuple
+    ) -> None:
         """Handle an error gracefully. May be overridden."""
         print("-" * 40, file=sys.stderr)
         print(
@@ -183,8 +190,6 @@ class BaseServer:
             client_address,
             file=sys.stderr,
         )
-        import traceback
-
         traceback.print_exc()
         print("-" * 40, file=sys.stderr)
 
@@ -224,7 +229,7 @@ class TCPServer(BaseServer):
             try:
                 self.server_bind()
                 self.server_activate()
-            except:
+            except BaseException:
                 self.server_close()
                 raise
 
@@ -276,22 +281,22 @@ class UDPServer(TCPServer):
     socket_type: int = socket.SOCK_DGRAM
     max_packet_size: int = 65536
 
-    def get_request(self) -> tuple[tuple[bytes, socket.socket], tuple]:
+    def get_request(self) -> tuple[Any, tuple]:
         """Get the request and client address from the socket. May be overridden."""
         data, client_address = self.socket.recvfrom(self.max_packet_size)
         return (data, self.socket), client_address
 
     def server_activate(self) -> None:
         """Activate the server. Maybe overridden."""
-        pass  # No listen() for UDP
+        # No listen() for UDP
 
-    def shutdown_request(self, request: tuple[bytes, socket.socket]) -> None:
+    def shutdown_request(self, request: Any) -> None:
         """Called to shutdown and close an individual request."""
         self.close_request(request)  # No shutdown for UDP sockets
 
-    def close_request(self, request: tuple[bytes, socket.socket]) -> None:
+    def close_request(self, request: Any) -> None:
         """Called to clean up an individual request."""
-        pass  # No close for UDP sockets
+        # No close for UDP sockets
 
 
 # Fork
@@ -300,11 +305,32 @@ if hasattr(os, "fork"):
     class ForkingMixIn:
         """Mix-in class to handle each request in a new process."""
 
-        timeout: int = 300
+        timeout: float | None = 300
         active_children: set[int] | None = None
         max_children: int = 40
         # If true, server_close() will wait for all child processes to finish.
         block_on_close: bool = False
+
+        # These methods are provided by the BaseServer class
+        def close_request(
+            self, request: Any
+        ) -> None:  # pylint: disable=unused-argument
+            """Close the request."""
+
+        def finish_request(
+            self, request: Any, client_address: tuple
+        ) -> None:  # pylint: disable=unused-argument
+            """Finish the request."""
+
+        def handle_error(
+            self, request: Any, client_address: tuple
+        ) -> None:  # pylint: disable=unused-argument
+            """Handle error."""
+
+        def shutdown_request(
+            self, request: Any
+        ) -> None:  # pylint: disable=unused-argument
+            """Shutdown the request."""
 
         def collect_children(self, *, blocking=False) -> None:
             """Internal routine to wait for child processes to terminate."""
@@ -348,9 +374,7 @@ if hasattr(os, "fork"):
             """Collect the zombie child processes regularly int the ForkingMixIn."""
             self.collect_children()
 
-        def process_request(
-            self, request: socket.socket, client_address: tuple
-        ) -> None:
+        def process_request(self, request: Any, client_address: tuple) -> None:
             """Fork a new process to handle the request."""
             pid = os.fork()
             if pid:
@@ -360,23 +384,22 @@ if hasattr(os, "fork"):
                 self.active_children.add(pid)
                 self.close_request(request)
                 return
-            else:
-                # child process
-                status = 1
+            # child process
+            status = 1
+            try:
+                self.finish_request(request, client_address)
+                status = 0
+            except BaseException:  # pylint: disable=broad-exception-caught
+                self.handle_error(request, client_address)
+            finally:
                 try:
-                    self.finish_request(request, client_address)
-                    status = 0
-                except:
-                    self.handle_error(request, client_address)
+                    self.shutdown_request(request)
                 finally:
-                    try:
-                        self.shutdown_request(request)
-                    finally:
-                        os._exit(status)
+                    os._exit(status)  # pylint: disable=protected-access
 
         def server_close(self) -> None:
             """Called to clean up the server."""
-            super().server_close()
+            super().server_close()  # type: ignore[misc]  # pylint: disable=no-member
             self.collect_children(blocking=self.block_on_close)
 
 
@@ -408,11 +431,13 @@ class _Threads(list):
 class _NoThreads:
     """Degenerate version of _Threads."""
 
-    def append(self, thread: threading.Thread) -> None:
-        pass
+    def append(
+        self, thread: threading.Thread
+    ) -> None:  # pylint: disable=unused-argument
+        """Do nothing."""
 
     def join(self) -> None:
-        pass
+        """Do nothing."""
 
 
 # Threading
@@ -421,20 +446,32 @@ class ThreadingMixIn:
 
     daemon_threads: bool = False
     block_on_close: bool = True
-    _threads = _NoThreads()
+    _threads: _Threads | _NoThreads = _NoThreads()
 
-    def process_request_thread(
-        self, request: socket.socket, client_address: tuple
-    ) -> None:
+    # These methods are provided by the BaseServer class
+    def finish_request(
+        self, request: Any, client_address: tuple
+    ) -> None:  # pylint: disable=unused-argument
+        """Finish the request."""
+
+    def handle_error(
+        self, request: Any, client_address: tuple
+    ) -> None:  # pylint: disable=unused-argument
+        """Handle error."""
+
+    def shutdown_request(self, request: Any) -> None:  # pylint: disable=unused-argument
+        """Shutdown the request."""
+
+    def process_request_thread(self, request: Any, client_address: tuple) -> None:
         """Handle the request in a separate thread."""
         try:
             self.finish_request(request, client_address)
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             self.handle_error(request, client_address)
         finally:
             self.shutdown_request(request)
 
-    def process_request(self, request: socket.socket, client_address: tuple) -> None:
+    def process_request(self, request: Any, client_address: tuple) -> None:
         """Start a new thread to process the request."""
         if self.block_on_close:
             vars(self).setdefault("_threads", _Threads())
@@ -448,7 +485,7 @@ class ThreadingMixIn:
 
     def server_close(self) -> None:
         """Called to clean up the server."""
-        super().server_close()
+        super().server_close()  # type: ignore[misc]  # pylint: disable=no-member
         self._threads.join()
 
 
@@ -457,24 +494,16 @@ if hasattr(os, "fork"):
     class ForkingTCPServer(ForkingMixIn, TCPServer):
         """TCP server class with ForkingMixIn."""
 
-        pass
-
     class ForkingUDPServer(ForkingMixIn, UDPServer):
         """UDP server class with ForkingMixIn."""
-
-        pass
 
 
 class ThreadingTCPServer(ThreadingMixIn, TCPServer):
     """TCP server class with ThreadingMixIn."""
 
-    pass
-
 
 class ThreadingUDPServer(ThreadingMixIn, UDPServer):
     """UDP server class with ThreadingMixIn."""
-
-    pass
 
 
 if hasattr(socket, "AF_UNIX"):
@@ -492,12 +521,8 @@ if hasattr(socket, "AF_UNIX"):
     class ThreadingUnixStreamServer(ThreadingMixIn, UnixStreamServer):
         """Unix domain stream server class with ThreadingMixIn."""
 
-        pass
-
     class ThreadingUnixDatagramServer(ThreadingMixIn, UnixDatagramServer):
         """Unix domain datagram server class with ThreadingMixIn."""
-
-        pass
 
 
 class BaseRequestHandler:
@@ -518,7 +543,6 @@ class BaseRequestHandler:
 
     def setup(self) -> None:
         """Initialize the request handler. May be overridden."""
-        pass
 
     def handle(self) -> None:
         """Handle the request. Must be overridden."""
@@ -526,7 +550,6 @@ class BaseRequestHandler:
 
     def finish(self) -> None:
         """Clean up the request handler. May be overridden."""
-        pass
 
 
 # The following two classes make it possible to use the same service
@@ -543,6 +566,10 @@ class StreamRequestHandler(BaseRequestHandler):
     # Disable Nagle's algorithm for the connection.
     disable_nagle_algorithm: bool = False
 
+    def handle(self) -> None:
+        """Handle the request. Override this method to implement the handler."""
+        raise NotImplementedError("Must be overridden by subclass.")
+
     def setup(self) -> None:
         """Initialize rfile and wfile."""
         self.connection = self.request
@@ -551,10 +578,11 @@ class StreamRequestHandler(BaseRequestHandler):
         if self.disable_nagle_algorithm:
             self.connection.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.rfile = self.connection.makefile("rb", self.rbufsize)
+        self.wfile: BufferedIOBase
         if self.wbufsize == 0:
             self.wfile = _SocketWriter(self.connection)
         else:
-            self.wfile = self.connection.makefile("wb", self.wbufsize)
+            self.wfile = self.connection.makefile("wb", self.wbufsize)  # type: ignore[assignment]
 
     def finish(self) -> None:
         """Clean up rfile and wfile."""
@@ -578,7 +606,7 @@ class _SocketWriter(BufferedIOBase):
     def writable(self) -> bool:
         return True
 
-    def write(self, b: bytes) -> int:
+    def write(self, b: bytes) -> int:  # type: ignore[override]
         self._sock.sendall(b)
         with memoryview(b) as mv:
             return mv.nbytes
@@ -590,10 +618,15 @@ class _SocketWriter(BufferedIOBase):
 class DatagramRequestHandler(BaseRequestHandler):
     """Define self.rfile and self.wfile for datagram (UDP) requests."""
 
-    def setup(self) -> None:
-        from io import BytesIO
+    packet: bytes
+    socket: socket.socket
 
-        self.packet, self.socket = self.request
+    def handle(self) -> None:
+        """Handle the request. Override this method to implement the handler."""
+        raise NotImplementedError("Must be overridden by subclass.")
+
+    def setup(self) -> None:
+        self.packet, self.socket = self.request  # type: ignore[misc]
         self.rfile = BytesIO(self.packet)
         self.wfile = BytesIO()
 

@@ -6,7 +6,6 @@ import threading
 import time
 
 import pytest
-
 from src.socket.socketserver import (
     BaseRequestHandler,
     BaseServer,
@@ -34,7 +33,7 @@ if HAS_FORK:
 # Check if Unix sockets are available
 HAS_UNIX_SOCKETS = hasattr(socket, "AF_UNIX")
 if HAS_UNIX_SOCKETS:
-    from src.socket.socketserver import (
+    from src.socket.socketserver import (  # noqa: F401
         ThreadingUnixDatagramServer,
         ThreadingUnixStreamServer,
         UnixDatagramServer,

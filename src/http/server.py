@@ -18,8 +18,12 @@ import urllib
 from functools import partial
 from pydoc import html
 
-from ..socket import socketserver
-from . import HTTPStatus, __author__, __version__
+from ..socketserver import socketserver  # pylint: disable=relative-beyond-top-level
+from . import (  # pylint: disable=relative-beyond-top-level
+    HTTPStatus,
+    __author__,
+    __version__,
+)
 
 # Default error message template
 DEFAULT_ERROR_MESSAGE = """\
@@ -70,7 +74,7 @@ class ThreadingHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
 class HTTPSServer(HTTPServer):
     """HTTP server class with SSL support."""
 
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments
         self,
         server_address,
         RequestHandlerClass,
@@ -82,9 +86,9 @@ class HTTPSServer(HTTPServer):
         alpn_protocols=None,
     ):
         try:
-            import ssl
-        except ImportError:
-            raise RuntimeError("SSL support requires the 'ssl' module")
+            import ssl  # pylint: disable=import-outside-toplevel
+        except ImportError as exc:
+            raise RuntimeError("SSL support requires the 'ssl' module") from exc
 
         self.ssl = ssl
         self.certifile = certifile
@@ -126,7 +130,7 @@ class BaseHTTPRequestHandler(socketserver.StreamRequestHandler):
     # Only support HTTP/1.1
     default_request_version = "HTTP/1.1"
 
-    def parse_request(self) -> bool:
+    def parse_request(self) -> bool:  # pylint: disable=too-many-return-statements
         """Parse a request (internal).
 
         The request should be stored in self.raw_requestline; the results
@@ -666,7 +670,7 @@ def _get_best_family(
     return family, sa
 
 
-def test(
+def test(  # pylint: disable=too-many-arguments
     HandlerClass: typing.Type[
         socketserver.StreamRequestHandler
     ] = BaseHTTPRequestHandler,

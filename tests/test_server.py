@@ -15,7 +15,7 @@ from http.server import (
     ThreadingHTTPSServer,
     _get_best_family,
 )
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 
 def http_request(host, port, method="GET", path="/", headers=None):
